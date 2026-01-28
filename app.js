@@ -2,14 +2,20 @@ const {
     default: makeWASocket,
     useMultiFileAuthState,
     DisconnectReason,
-    fetchLatestBaileysVersion
+    fetchLatestBaileysVersion,
+    Browsers
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { SESSION_PATH, RECONNECT_INTERVAL } = require('./src/config');
 const { handleMessage } = require('./src/services/botLogic');
 const { delay } = require('./src/utils');
+
+// Asegurar ruta absoluta para persistencia en Railway/Docker
+const AUTH_PATH = path.isAbsolute(SESSION_PATH) ? SESSION_PATH : path.join(process.cwd(), SESSION_PATH);
 
 // Servidor web básico para Railway (Health Check)
 const server = http.createServer((req, res) => {
@@ -19,106 +25,114 @@ const server = http.createServer((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`📡 Servidor de salud activo en puerto ${PORT} (0.0.0.0)`);
+    console.log(`📡 Servidor de salud activo en puerto ${PORT}`);
 });
 
-// Función principal asíncrona
+/**
+ * Función principal para iniciar el bot
+ */
 async function startBot() {
-    console.log(`\n🤖 Iniciando Bot de Atención al Cliente...`);
-    console.log(`📂 Ruta de sesión: ${SESSION_PATH}`);
+    console.log(`\n🤖 Iniciando YoungStars AI...`);
 
-    // Cargar estado de la sesión (Gestión automática de persistencia en sistema de archivos)
-    const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
+    // Validar carpeta de sesión
+    if (!fs.existsSync(AUTH_PATH)) {
+        fs.mkdirSync(AUTH_PATH, { recursive: true });
+    }
+
+    const { state, saveCreds } = await useMultiFileAuthState(AUTH_PATH);
     const { version, isLatest } = await fetchLatestBaileysVersion();
 
-    console.log(`📦 Usando versión de Baileys: v${version.join('.')} (Latest: ${isLatest})`);
+    console.log(`📦 Baileys v${version.join('.')} (Latest: ${isLatest})`);
 
     const sock = makeWASocket({
         version,
-        logger: pino({ level: 'silent' }), // Log nivel silent para mantener limpia la consola
-        // printQRInTerminal: true, // Deprecado en versiones nuevas
+        logger: pino({ level: 'error' }), // Cambiado de silent a error para ver fallos reales
         auth: state,
-        browser: ['youngAI 🕵️‍♀️🤖', 'Chrome', '1.0.0'], // Nombre visible en WhatsApp Web
-        syncFullHistory: false, // Optimización: no sincronizar todo el historial antiguo
-        generateHighQualityLinkPreview: true
+        // Usar un navegador estándar sin carácteres especiales para mayor estabilidad
+        browser: Browsers.ubuntu('Chrome'),
+        printQRInTerminal: false,
+        syncFullHistory: false,
+        generateHighQualityLinkPreview: true,
+        // Evita que la sesión se cierre por inactividad del socket
+        keepAliveIntervalMs: 30000,
+        markOnline: true
     });
 
-    // Evento: Actualización de Credenciales
-    // CRUCIAL: Guarda las credenciales cada vez que se actualizan para evitar perder la sesión
-    sock.ev.on('creds.update', saveCreds);
+    // Guardar credenciales de forma asíncrona y segura
+    sock.ev.on('creds.update', async () => {
+        try {
+            await saveCreds();
+        } catch (err) {
+            console.error('❌ Error guardando credenciales:', err);
+        }
+    });
 
-    // Evento: Actualización de Conexión
+    // Gestión de conexión
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            console.clear();
             console.log('\n┌──────────────────────────────────────┐');
             console.log('│  ⚡ ESCANEA EL QR PARA CONECTAR ⚡   │');
             console.log('└──────────────────────────────────────┘\n');
             qrcode.generate(qr, { small: true });
-            console.log('\n💡 Tip: Si el QR es muy grande, reduce el zoom del terminal (Ctrl + -)');
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            const reason = lastDisconnect?.error || 'Desconocido';
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            const reason = lastDisconnect?.error?.message || 'Razón desconocida';
 
-            console.warn(`\n⚠️ Conexión cerrada. Razón: ${reason}`);
+            console.warn(`\n⚠️ Conexión cerrada. Código: ${statusCode}. Motivo: ${reason}`);
 
             if (shouldReconnect) {
-                console.log(`🔄 Intentando reconectar en ${RECONNECT_INTERVAL / 1000} segundos...`);
-                await delay(RECONNECT_INTERVAL);
-                startBot(); // Recursión para reconectar
+                console.log(`🔄 Reconectando en ${RECONNECT_INTERVAL / 1000}s...`);
+                setTimeout(() => startBot(), RECONNECT_INTERVAL);
             } else {
-                console.error('❌ Sesión cerrada definitivamente (Logout). Borrando carpeta de sesión...');
-                const fs = require('fs');
-                try {
-                    fs.rmSync(SESSION_PATH, { recursive: true, force: true });
-                    console.log('✅ Carpeta de sesión eliminada correctamente.');
-                } catch (err) {
-                    console.error('⚠️ No se pudo eliminar la carpeta de sesión:', err);
+                console.error('❌ Sesión cerrada por WhatsApp (Logout). Limpiando datos...');
+                if (fs.existsSync(AUTH_PATH)) {
+                    fs.rmSync(AUTH_PATH, { recursive: true, force: true });
                 }
+                console.log('✅ Carpeta de sesión eliminada. Reinicia para generar nuevo QR.');
                 process.exit(1);
             }
         } else if (connection === 'open') {
-            console.log('\n✅ ¡CONEXIÓN ESTABLECIDA! El bot está listo para recibir mensajes.');
-            console.log('🤖 Escuchando mensajes entrantes...\n');
+            console.log('\n✅ ¡BOT CONECTADO Y ONLINE!');
+            console.log('🚀 Listo para recibir mensajes.\n');
         }
     });
 
-    // Evento: Recepción de Mensajes
+    // Recepción de mensajes
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        try {
-            if (type === 'notify') {
-                for (const msg of messages) {
-                    // Ignorar mensajes enviados por el propio bot para evitar bucles
-                    if (!msg.message || msg.key.fromMe) continue;
+        if (type !== 'notify') return;
 
-                    // Extraer los diferentes tipos de texto posible
-                    const messageType = Object.keys(msg.message)[0];
-                    let text =
-                        msg.message.conversation ||
-                        msg.message.extendedTextMessage?.text ||
-                        msg.message.imageMessage?.caption;
+        for (const msg of messages) {
+            try {
+                if (!msg.message || msg.key.fromMe) continue;
 
-                    if (text) {
-                        // Procesar lógica de negocio
-                        await handleMessage(sock, msg, text);
-                    }
+                const text = msg.message.conversation ||
+                    msg.message.extendedTextMessage?.text ||
+                    msg.message.imageMessage?.caption;
+
+                if (text) {
+                    await handleMessage(sock, msg, text);
                 }
+            } catch (err) {
+                console.error('❌ Error procesando mensaje:', err);
             }
-        } catch (error) {
-            console.error('Error procesando mensaje:', error);
         }
     });
 
-    // Manejo de errores globales para evitar caídas
+    // Manejo de errores globales corregido
+    process.removeAllListeners('uncaughtException');
     process.on('uncaughtException', (err) => {
-        console.error('🔥 Error Crítico no Controlado:', err);
-        // Opcional: reiniciar si es crítico
+        console.error('🔥 Error Crítico:', err);
+        if (err.message.includes('EPIPE') || err.message.includes('ECONNRESET')) {
+            console.log('Retrying connection due to network error...');
+        }
     });
 }
 
-// Iniciar aplicación
-startBot().catch(err => console.error('Error al iniciar bot:', err));
+// Iniciar
+startBot().catch(err => console.error('Error fatal al iniciar:', err));
+

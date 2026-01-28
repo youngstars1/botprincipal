@@ -97,13 +97,18 @@ Railway re-desplegará automáticamente.
 
 ---
 
-## ⚠️ **Limitaciones**
+## 💾 Persistencia de Sesión (SOLUCIÓN DEFINITIVA)
 
-1. **Sesión de WhatsApp NO es persistente**
-   - Se borra cada vez que Railway reinicia
-   - Tendrás que escanear el QR de nuevo
+Para que el bot NO se desconecte cada vez que Railway reinicie, debes usar un **Railway Volume**:
 
-2. **Solución**: Para sesión persistente, necesitas VPS
+1. Ve a tu proyecto en **Railway Dashboard**.
+2. Click en **"+ New"** → **"Volume"**.
+3. Ponle de nombre: `youngstars_session`.
+4. Click en **"Mount Volume"** y selecciona tu servicio del bot.
+5. En **"Mount Path"**, escribe: `/app/auth_info_baileys`
+6. Ve a las **Variables** de tu servicio y asegúrate de que:
+   - `SESSION_PATH` sea `/app/auth_info_baileys`
+7. Redeploy el servicio.
 
 ---
 
