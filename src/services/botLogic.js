@@ -96,16 +96,8 @@ async function handleMessage(sock, msg, text) {
     const isMenuOption = ['1', '2', '3', '4'].includes(cleanText);
     const hasTrigger = TRIGGER_WORDS.some(word => cleanText.includes(word));
 
-    // Si no es saludo, ni opción de menú, ni tiene triggers, enviamos la respuesta mínima
+    // Si no es saludo, ni opción de menú, ni tiene triggers, NO RESPONDEMOS (Silencio total)
     if (!isGreeting && !isMenuOption && !hasTrigger) {
-        // Ignoramos menciones a ChatGPT/OpenAI según requerimiento
-        if (cleanText.includes('chatgpt') || cleanText.includes('openai')) return;
-
-        await sock.sendPresenceUpdate('composing', remoteJid);
-        await delay(1000);
-        await sock.sendMessage(remoteJid, {
-            text: "Hola 👋 Para ayudarte mejor, dime si buscas algo relacionado con páginas web, tiendas online o diseño digital."
-        });
         return;
     }
 
