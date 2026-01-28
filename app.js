@@ -71,7 +71,14 @@ async function startBot() {
                 await delay(RECONNECT_INTERVAL);
                 startBot(); // Recursión para reconectar
             } else {
-                console.error('❌ Sesión cerrada definitivamente (Logout). Borra la carpeta de sesión y reinicia.');
+                console.error('❌ Sesión cerrada definitivamente (Logout). Borrando carpeta de sesión...');
+                const fs = require('fs');
+                try {
+                    fs.rmSync(SESSION_PATH, { recursive: true, force: true });
+                    console.log('✅ Carpeta de sesión eliminada correctamente.');
+                } catch (err) {
+                    console.error('⚠️ No se pudo eliminar la carpeta de sesión:', err);
+                }
                 process.exit(1);
             }
         } else if (connection === 'open') {
