@@ -3,9 +3,9 @@ const { ADMIN_NUMBER } = require('../config');
 const { getAIResponse } = require('./aiService');
 
 /**
- * Textos y Menús del sistema - YoungStars Design AI
+ * Textos y Menús del sistema - youngAI 🕵️‍♀️🤖
  */
-const MAIN_MENU = `Hola 👋 Soy *YoungStars Design AI* ¿En qué te puedo ayudar hoy?
+const MAIN_MENU = `Hola 👋 Soy *youngAI 🕵️‍♀️🤖* ¿En qué te puedo ayudar hoy?
 
 1️⃣ *Servicios y Tecnologías*
 2️⃣ *Precios*
@@ -13,6 +13,14 @@ const MAIN_MENU = `Hola 👋 Soy *YoungStars Design AI* ¿En qué te puedo ayuda
 4️⃣ *Agendar Directamente*
 
 _Escribe el número o tu consulta directamente._`;
+
+const TRIGGER_WORDS = [
+    'web', 'página', 'sitio', 'website', 'tienda', 'ecommerce', 'e-commerce',
+    'sistema', 'plataforma', 'landing', 'diseño', 'flyer', 'logo', 'branding',
+    'identidad', 'marca', 'desarrollo', 'programar', 'código', 'php',
+    'javascript', 'python', 'automatización', 'precio', 'cotizar', 'valor',
+    'contratar', 'servicio', 'proyecto', 'negocio'
+];
 
 const RESPONSES = {
     '1': `💼 *Servicios y Tecnologías*
@@ -63,10 +71,7 @@ Puedes contactarnos vía:
 };
 
 /**
- * Lógica principal de manejo de mensajes
- * @param {Object} sock Instancia del socket de Baileys
- * @param {Object} msg Objeto del mensaje recibido
- * @param {String} text Texto extraído del mensaje
+ * Manejador principal de mensajes
  */
 async function handleMessage(sock, msg, text) {
     if (!text) return;
@@ -77,8 +82,6 @@ async function handleMessage(sock, msg, text) {
 
     // --- COMANDOS DE ADMIN ---
     if (cleanText === '!status' || cleanText === 'admin status') {
-        // Verifica si el sender es el admin configurado en .env
-        // Se puede hacer una validación más laxa si el .env no tiene el código de país exacto
         if (ADMIN_NUMBER && senderNumber.includes(ADMIN_NUMBER)) {
             await sock.sendMessage(remoteJid, {
                 text: `🔰 *ESTADO DEL SISTEMA*\n\n✅ *Online*: Sí\n⏱ *Uptime*: ${process.uptime().toFixed(2)}s\n📅 *Fecha*: ${new Date().toLocaleString()}`
@@ -87,37 +90,57 @@ async function handleMessage(sock, msg, text) {
         }
     }
 
-    // --- FLUJO DE CLIENTES ---
-
-    // Lista de palabras que activan el menú
+    // --- FILTRO GATEKEEPER (Filtro de Activación) ---
     const greetings = ['hola', 'buenas', 'buenos dias', 'buenas tardes', 'inicio', 'menu', 'holl'];
+    const isGreeting = greetings.some(word => cleanText.includes(word));
+    const isMenuOption = ['1', '2', '3', '4'].includes(cleanText);
+    const hasTrigger = TRIGGER_WORDS.some(word => cleanText.includes(word));
 
-    if (greetings.some(word => cleanText.includes(word)) || cleanText === '0') {
-        // Simular escritura
+    // Si no es saludo, ni opción de menú, ni tiene triggers, enviamos la respuesta mínima
+    if (!isGreeting && !isMenuOption && !hasTrigger) {
+        // Ignoramos menciones a ChatGPT/OpenAI según requerimiento
+        if (cleanText.includes('chatgpt') || cleanText.includes('openai')) return;
+
         await sock.sendPresenceUpdate('composing', remoteJid);
-        await delay(1500); // Espera natural
+        await delay(1000);
+        await sock.sendMessage(remoteJid, {
+            text: "Hola 👋 Para ayudarte mejor, dime si buscas algo relacionado con páginas web, tiendas online o diseño digital."
+        });
+        return;
+    }
 
+    // --- FLUJO ACTIVADO ---
+
+    // Mostrar menú principal
+    if (isGreeting || cleanText === '0') {
+        await sock.sendPresenceUpdate('composing', remoteJid);
+        await delay(1500);
         await sock.sendMessage(remoteJid, { text: MAIN_MENU });
         return;
     }
 
     // Respuestas numéricas
     if (RESPONSES[cleanText]) {
-        // Simular escritura
         await sock.sendPresenceUpdate('composing', remoteJid);
-        await delay(2000); // Espera un poco más larga para respuestas con contenido
-
+        await delay(2000);
         await sock.sendMessage(remoteJid, { text: RESPONSES[cleanText] });
         return;
     }
 
-    // Si no coincide con ningún comando, usa Gemini AI para responder
-    // Esto permite conversaciones más naturales
-    await sock.sendPresenceUpdate('composing', remoteJid);
-    await delay(2000);
+    // Inteligencia Artificial (OpenAI) como fallback inteligente
+    try {
+        await sock.sendPresenceUpdate('composing', remoteJid);
 
-    const aiResponse = await getAIResponse(text);
-    await sock.sendMessage(remoteJid, { text: aiResponse });
+        // Obtenemos respuesta de la IA
+        const aiResponse = await getAIResponse(text);
+
+        await sock.sendMessage(remoteJid, { text: aiResponse });
+    } catch (error) {
+        console.error('Error en AI Fallback:', error);
+        await sock.sendMessage(remoteJid, {
+            text: "Disculpa, estoy teniendo un problema técnico. ¿Podrías intentar de nuevo o escribir *menu*?"
+        });
+    }
 }
 
 module.exports = { handleMessage };

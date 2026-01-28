@@ -38,7 +38,7 @@ async function startBot() {
         logger: pino({ level: 'silent' }), // Log nivel silent para mantener limpia la consola
         // printQRInTerminal: true, // Deprecado en versiones nuevas
         auth: state,
-        browser: ['YoungStars Design AI', 'Chrome', '1.0.0'], // Nombre visible en WhatsApp Web
+        browser: ['youngAI 🕵️‍♀️🤖', 'Chrome', '1.0.0'], // Nombre visible en WhatsApp Web
         syncFullHistory: false, // Optimización: no sincronizar todo el historial antiguo
         generateHighQualityLinkPreview: true
     });
