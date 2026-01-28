@@ -6,9 +6,21 @@ const {
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
+const http = require('http');
 const { SESSION_PATH, RECONNECT_INTERVAL } = require('./src/config');
 const { handleMessage } = require('./src/services/botLogic');
 const { delay } = require('./src/utils');
+
+// Servidor web básico para Railway (Health Check)
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('YoungStars Bot is running!\n');
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`📡 Servidor de salud activo en puerto ${PORT}`);
+});
 
 // Función principal asíncrona
 async function startBot() {
