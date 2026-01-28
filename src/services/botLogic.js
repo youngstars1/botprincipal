@@ -7,19 +7,32 @@ const { getAIResponse } = require('./aiService');
  */
 const MAIN_MENU = `Hola 👋 Soy *youngAI 🕵️‍♀️🤖* ¿En qué te puedo ayudar hoy?
 
-1️⃣ *Servicios y Tecnologías*
+1️⃣ *Servicios y tecnologías*
 2️⃣ *Precios*
-3️⃣ *Comprar Productos*
-4️⃣ *Agendar Directamente*
+3️⃣ *Comprar productos*
+4️⃣ *Agendar contacto con un agente*
 
-_Escribe el número o tu consulta directamente._`;
+_Escribe el número o la palabra *menu* para ver estas opciones._`;
 
 const TRIGGER_WORDS = [
-    'web', 'página', 'sitio', 'website', 'tienda', 'ecommerce', 'e-commerce',
-    'sistema', 'plataforma', 'landing', 'diseño', 'flyer', 'logo', 'branding',
-    'identidad', 'marca', 'desarrollo', 'programar', 'código', 'php',
-    'javascript', 'python', 'automatización', 'precio', 'cotizar', 'valor',
-    'contratar', 'servicio', 'proyecto', 'negocio'
+    'web', 'página', 'paginas', 'sitio', 'website', 'webapp', 'app web',
+    'landing', 'landing page', 'corporativa', 'desarrollo web', 'crear web', 'hacer web',
+    'tienda', 'tienda online', 'ecommerce', 'e-commerce', 'shop', 'carrito', 'checkout', 'vender online',
+    'woocommerce', 'shopify', 'diseño', 'diseño gráfico', 'flyer', 'volante', 'afiche',
+    'logo', 'logotipo', 'branding', 'identidad visual', 'marca', 'rebranding',
+    'mantenimiento web', 'soporte web', 'actualizar web', 'sistema', 'plataforma', 'software',
+    'panel', 'dashboard', 'automatización', 'bot', 'chatbot', 'whatsapp bot', 'api',
+    'programar', 'desarrollo', 'código', 'php', 'javascript', 'js', 'node', 'python',
+    'precio', 'precios', 'valor', 'costo', 'cotizar', 'cotización', 'presupuesto',
+    'cuánto cuesta', 'cuanto vale', 'contratar', 'servicio', 'plan', 'pago',
+    'proyecto', 'negocio', 'emprendimiento', 'empresa', 'pyme', 'startup', 'cliente'
+];
+
+const FOLLOW_UP_PHRASES = [
+    'cómo va mi proyecto', 'como va mi proyecto', 'estado del proyecto', 'cómo va el trabajo',
+    'como va el trabajo', 'hay avances', 'en qué va lo mío', 'en que va lo mio',
+    'cómo va mi pedido', 'como va mi pedido', 'estado del diseño', 'estado del web',
+    'estado del logo', 'estado del flyer'
 ];
 
 const RESPONSES = {
@@ -70,8 +83,9 @@ Puedes contactarnos vía:
 ¿Cuándo te viene mejor para conversar?`
 };
 
-// Almacén de historial en memoria
+// Almacén de historial y estados en memoria
 const CONVERSATION_HISTORY = {};
+const SESSION_TIMEOUT = 3 * 60 * 1000; // 3 minutos
 
 /**
  * Manejador principal de mensajes
@@ -82,11 +96,56 @@ async function handleMessage(sock, msg, text) {
     const remoteJid = msg.key.remoteJid;
     const cleanText = text.trim().toLowerCase();
     const senderNumber = remoteJid.replace('@s.whatsapp.net', '');
+    const now = Date.now();
 
-    // Inicializar historial si no existe
-    if (!CONVERSATION_HISTORY[remoteJid]) {
-        CONVERSATION_HISTORY[remoteJid] = [];
+    // 1. Gestión de Sesión y Expiración
+    if (CONVERSATION_HISTORY[remoteJid]) {
+        const lastActivity = CONVERSATION_HISTORY[remoteJid].lastActivity;
+
+        if (now - lastActivity > SESSION_TIMEOUT) {
+            // VERIFICAR SI YA SE ENVIÓ EL MENSAJE DE EXPIRACIÓN
+            if (!CONVERSATION_HISTORY[remoteJid].expiredNotified) {
+                CONVERSATION_HISTORY[remoteJid].expiredNotified = true;
+                CONVERSATION_HISTORY[remoteJid].sessionActive = false;
+
+                // Si el mensaje actual NO es "menu", enviamos notificación de expiración
+                if (cleanText !== 'menu') {
+                    await sock.sendMessage(remoteJid, {
+                        text: "⏳ La sesión expiró. Escribe *menu* para ver los servicios disponibles."
+                    });
+                    return;
+                }
+            } else {
+                // YA FUE NOTIFICADO. Solo responder si escribe "menu"
+                if (cleanText !== 'menu') {
+                    console.log(`🤐 Sesión expirada y ya notificada para ${senderNumber}. Ignorando.`);
+                    return;
+                }
+            }
+        }
     }
+
+    // 2. Inicializar o Resetear con "menu"
+    if (!CONVERSATION_HISTORY[remoteJid] || cleanText === 'menu') {
+        CONVERSATION_HISTORY[remoteJid] = {
+            messages: [],
+            lastActivity: now,
+            serviceSelected: null,
+            flowLevel: 'inicio',
+            expiredNotified: false,
+            sessionActive: true
+        };
+
+        if (cleanText === 'menu') {
+            await sock.sendPresenceUpdate('composing', remoteJid);
+            await delay(1000);
+            await sock.sendMessage(remoteJid, { text: MAIN_MENU });
+            return;
+        }
+    }
+
+    // Actualizar última actividad
+    CONVERSATION_HISTORY[remoteJid].lastActivity = now;
 
     // --- COMANDOS DE ADMIN ---
     if (cleanText === '!status' || cleanText === 'admin status') {
@@ -98,65 +157,70 @@ async function handleMessage(sock, msg, text) {
         }
     }
 
-    // --- FILTRO GATEKEEPER (Filtro de Activación) ---
-    const greetings = ['hola', 'buenas', 'buenos dias', 'buenas tardes', 'inicio', 'menu', 'holl'];
-    const isGreeting = greetings.some(word => cleanText.includes(word));
+    // --- FILTRO DE ACTIVACIÓN ESTRICTO ---
     const isMenuOption = ['1', '2', '3', '4'].includes(cleanText);
     const hasTrigger = TRIGGER_WORDS.some(word => cleanText.includes(word));
+    const isFollowUp = FOLLOW_UP_PHRASES.some(phrase => cleanText.includes(phrase));
+    const isGreetingOnly = ['hola', 'buenas', 'hey', 'buenos dias', 'buenos días', 'buenas tardes'].includes(cleanText);
 
-    // Si no es saludo, ni opción de menú, ni tiene triggers, NO RESPONDEMOS (Silencio total)
-    if (!isGreeting && !isMenuOption && !hasTrigger) {
+    // Si es solo saludo -> Silencio (según requisito)
+    if (isGreetingOnly && !isMenuOption && !hasTrigger && !isFollowUp) {
         return;
     }
 
-    // --- FLUJO ACTIVADO ---
+    // ¿Ya hay una conversación activa?
+    const isConversationActive = CONVERSATION_HISTORY[remoteJid].serviceSelected !== null;
 
-    // Mostrar menú principal
-    if (isGreeting || cleanText === '0') {
-        await sock.sendPresenceUpdate('composing', remoteJid);
-        await delay(1500);
-        await sock.sendMessage(remoteJid, { text: MAIN_MENU });
-        // Limpiamos historial al volver al menú para un inicio fresco si se desea
-        // O lo mantenemos si prefieres que recuerde incluso tras el menú. 
-        // Por ahora lo mantendremos.
+    // Regla de Silencio Total:
+    // No respondemos si no hay intención clara, ni seguimiento, ni opción de menú.
+    if (!isMenuOption && !hasTrigger && !isFollowUp && !isConversationActive) {
         return;
     }
 
-    // Respuestas numéricas
+    // Respuestas numéricas (Menú)
     if (RESPONSES[cleanText]) {
         await sock.sendPresenceUpdate('composing', remoteJid);
-        await delay(2000);
+        await delay(1500);
         await sock.sendMessage(remoteJid, { text: RESPONSES[cleanText] });
 
-        // Guardamos la interacción en el historial para contexto
-        CONVERSATION_HISTORY[remoteJid].push({ role: 'user', content: text });
-        CONVERSATION_HISTORY[remoteJid].push({ role: 'assistant', content: RESPONSES[cleanText] });
+        const serviceNames = { '1': 'Servicios y Tecnologías', '2': 'Precios', '3': 'Comprar Productos', '4': 'Agendar' };
+        CONVERSATION_HISTORY[remoteJid].serviceSelected = serviceNames[cleanText];
+        CONVERSATION_HISTORY[remoteJid].flowLevel = 'detalles';
+
+        CONVERSATION_HISTORY[remoteJid].messages.push({ role: 'user', content: text });
+        CONVERSATION_HISTORY[remoteJid].messages.push({ role: 'assistant', content: RESPONSES[cleanText] });
         return;
     }
 
-    // Inteligencia Artificial (OpenAI) como fallback inteligente
+    // Inteligencia Artificial (OpenAI)
     try {
+        // Ignorar si menciona chatgpt
+        if (cleanText.includes('chatgpt')) return;
+
         await sock.sendPresenceUpdate('composing', remoteJid);
 
-        // Obtenemos respuesta de la IA pasando el historial acumulado
-        const aiResponse = await getAIResponse(text, CONVERSATION_HISTORY[remoteJid]);
+        const currentState = {
+            servicioActual: CONVERSATION_HISTORY[remoteJid].serviceSelected,
+            etapaDelFlujo: CONVERSATION_HISTORY[remoteJid].flowLevel
+        };
+
+        const aiResponse = await getAIResponse(text, CONVERSATION_HISTORY[remoteJid].messages, currentState);
+
+        if (aiResponse.includes('IGNORAR_MENSAJE')) {
+            return;
+        }
 
         await sock.sendMessage(remoteJid, { text: aiResponse });
 
-        // Actualizamos historial con esta nueva interacción
-        CONVERSATION_HISTORY[remoteJid].push({ role: 'user', content: text });
-        CONVERSATION_HISTORY[remoteJid].push({ role: 'assistant', content: aiResponse });
+        CONVERSATION_HISTORY[remoteJid].messages.push({ role: 'user', content: text });
+        CONVERSATION_HISTORY[remoteJid].messages.push({ role: 'assistant', content: aiResponse });
 
-        // Limitar historial a los últimos 10 mensajes para no saturar tokens
-        if (CONVERSATION_HISTORY[remoteJid].length > 10) {
-            CONVERSATION_HISTORY[remoteJid] = CONVERSATION_HISTORY[remoteJid].slice(-10);
+        if (CONVERSATION_HISTORY[remoteJid].messages.length > 6) {
+            CONVERSATION_HISTORY[remoteJid].messages = CONVERSATION_HISTORY[remoteJid].messages.slice(-6);
         }
 
     } catch (error) {
         console.error('Error en AI Fallback:', error);
-        await sock.sendMessage(remoteJid, {
-            text: "Disculpa, estoy teniendo un problema técnico. ¿Podrías intentar de nuevo o escribir *menu*?"
-        });
     }
 }
 

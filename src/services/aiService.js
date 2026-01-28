@@ -2,47 +2,45 @@ const OpenAI = require('openai');
 const { BUSINESS_CONTEXT } = require('./context');
 
 /**
- * Servicio de IA usando OpenAI (ChatGPT)
+ * Servicio de IA para respuestas inteligentes (OpenAI)
  * @param {String} userMessage - Mensaje del usuario
- * @param {String} conversationHistory - Historial opcional de conversación
- * @returns {String} - Respuesta generada por ChatGPT
+ * @param {Array} conversationHistory - Historial de conversación {role, content}
+ * @param {Object} currentState - {servicioActual, etapaDelFlujo}
  */
-async function getAIResponse(userMessage, conversationHistory = '') {
+async function getAIResponse(userMessage, conversationHistory = [], currentState = {}) {
     try {
-        // Validar que existe la API Key
         if (!process.env.OPENAI_API_KEY) {
-            console.error('❌ OPENAI_API_KEY no está configurada en .env');
-            return `Disculpa, el sistema de IA no está configurado. 😅\n\n¿Podrías escribir "menu" para ver las opciones disponibles?`;
+            return `Disculpa, el sistema de IA no está configurado.`;
         }
 
-        // Inicializar OpenAI
         const openai = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY
         });
 
-        // Construir el mensaje con contexto
         const systemPrompt = `${BUSINESS_CONTEXT}
 
-Eres un asistente conversacional de WhatsApp. 
-REGLA DE ORO: Sigue la estrategia de "Insistencia Inteligente" (Estados 1, 2 y 3) si el usuario es vago.
-No insistas más de 3 veces. Si el usuario no decide, ofrece contacto humano con un agente.
-Responde de forma profesional, breve (máximo 3-4 párrafos) y enfocada en convertir.`;
+# ESTADO ACTUAL DE LA CONVERSACIÓN
+- Servicio Seleccionado: ${currentState.servicioActual || 'Ninguno aún'}
+- Etapa del Flujo: ${currentState.etapaDelFlujo || 'Inicio'}
+
+# REGLAS DE ORO (ESTRICTO):
+1. Eres youngAI 🕵️‍♀️🤖. NUNCA menciones a ChatGPT o OpenAI.
+2. Si el usuario pregunta algo AJENO a los servicios de YoungStars Design (fútbol, cocina, política, o simplemente tonterías), responde ÚNICAMENTE con la palabra: IGNORAR_MENSAJE.
+3. Si el usuario pregunta "¿quién eres?" o algo similar, responde como youngAI 🕵️‍♀️🤖 y ofrece el menú.
+4. Tu objetivo es convertir al usuario en cliente. Sigue el flujo del servicio seleccionado.
+5. Máximo 2-3 párrafos cortos. No seas pesado.`;
 
         const messages = [
             { role: 'system', content: systemPrompt }
         ];
 
-        // Agregar historial si existe (ahora se espera un array de objetos {role, content})
-        if (conversationHistory && Array.isArray(conversationHistory)) {
+        // Añadir historial si existe
+        if (Array.isArray(conversationHistory)) {
             messages.push(...conversationHistory);
-        } else if (typeof conversationHistory === 'string' && conversationHistory) {
-            messages.push({ role: 'assistant', content: conversationHistory });
         }
 
-        // Agregar pregunta actual del usuario
+        // Añadir mensaje actual
         messages.push({ role: 'user', content: userMessage });
-
-        console.log('🤖 Consultando a ChatGPT...');
 
         const completion = await openai.chat.completions.create({
             model: 'gpt-3.5-turbo',
@@ -51,17 +49,12 @@ Responde de forma profesional, breve (máximo 3-4 párrafos) y enfocada en conve
             max_tokens: 500
         });
 
-        const response = completion.choices[0].message.content;
-
-        console.log('✅ ChatGPT respondió correctamente');
-        return response.trim();
+        const responseText = completion.choices[0].message.content;
+        return responseText;
 
     } catch (error) {
-        console.error('❌ Error llamando a OpenAI:', error.message);
-        console.error('Detalles completos:', error);
-
-        // Respuesta de fallback si falla la IA
-        return `Disculpa, estoy teniendo problemas técnicos en este momento. 😅\n\n¿Podrías escribir "menu" para ver las opciones disponibles, o espera un momento y un miembro del equipo te atenderá?`;
+        console.error('Error en getAIResponse:', error);
+        return 'IGNORAR_MENSAJE'; // Por seguridad ante error, ignoramos
     }
 }
 
