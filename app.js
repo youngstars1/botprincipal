@@ -40,8 +40,12 @@ async function startBot() {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            console.log('\n⚡ ESCANEA EL CÓDIGO QR PARA CONECTAR ⚡\n');
+            console.clear();
+            console.log('\n┌──────────────────────────────────────┐');
+            console.log('│  ⚡ ESCANEA EL QR PARA CONECTAR ⚡   │');
+            console.log('└──────────────────────────────────────┘\n');
             qrcode.generate(qr, { small: true });
+            console.log('\n💡 Tip: Si el QR es muy grande, reduce el zoom del terminal (Ctrl + -)');
         }
 
         if (connection === 'close') {

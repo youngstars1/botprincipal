@@ -5,64 +5,48 @@ const { getAIResponse } = require('./aiService');
 /**
  * Textos y Menús del sistema - YoungStars Design AI
  */
-const MAIN_MENU = `👋 *Hola, soy YoungAI🕵️‍♀️🤖*
-
-¿En qué te puedo ayudar hoy?
+const MAIN_MENU = `Hola 👋 Soy *YoungStars Design AI* ¿En qué te puedo ayudar hoy?
 
 1️⃣ *Servicios y Tecnologías*
 2️⃣ *Precios*
 3️⃣ *Comprar Productos*
 4️⃣ *Agendar Directamente*
 
-_Diseño • Desarrollo • Innovación_`;
+_Escribe el número o tu consulta directamente._`;
 
 const RESPONSES = {
     '1': `💼 *Servicios y Tecnologías*
 
-🌐 *Desarrollo Web*
+*Servicios principales:*
 • Páginas web modernas y profesionales
 • Tiendas online (E-commerce)
+• Diseño UX/UI avanzado
 • Landing pages de alto impacto
 • Sistemas web personalizados
 • Automatizaciones
 
-🎨 *Diseño Gráfico*
-• Flyers digitales
-• Logos profesionales
-• Branding e identidad visual
+*Diseño gráfico:*
+• Flyers digitales, Logos, Branding
 • Diseño para redes sociales
 
-⚙️ *Tecnologías*
-• HTML, CSS, JavaScript
-• PHP, Python
-• Animaciones modernas
-• Integraciones de pago (Flow, MercadoPago)
+*Tecnologías:*
+HTML, CSS, JavaScript, PHP, Python.
 
 ¿Qué tipo de servicio estás buscando?`,
 
     '2': `💰 *Precios*
 
-Los precios dependen del tipo de proyecto y sus características específicas.
+Los precios dependen de la complejidad de tu proyecto.
 
 Puedes revisar mis *planes y precios actualizados* aquí:
 👉 https://portfolio.youngstarsstore.com/#pricing
-
-También puedes ver ejemplos de proyectos en el portafolio.
 
 ¿Qué tipo de proyecto tienes en mente?`,
 
     '3': `🛒 *Comprar Productos*
 
-Tengo productos digitales disponibles para compra directa.
-
-Visita la tienda online:
+Puedes comprar productos digitales directamente en nuestra tienda online:
 👉 https://youngstarsstore.com
-
-Encontrarás:
-• Plantillas web
-• Recursos de diseño
-• Herramientas digitales
-• Productos personalizados
 
 ¿Hay algo específico que estés buscando?`,
 
@@ -70,12 +54,10 @@ Encontrarás:
 
 Perfecto 👍 Podemos hablar directamente y ver tu proyecto en detalle.
 
-Opciones de contacto:
+Puedes contactarnos vía:
 • *WhatsApp*: +56968756891 
 • *Formulario*: portfolio.youngstarsstore.com/#contact
 • *Email*: contacto@youngstarsstore.com 
-
-También puedes escribirme aquí mismo y coordinamos.
 
 ¿Cuándo te viene mejor para conversar?`
 };

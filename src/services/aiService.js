@@ -23,8 +23,10 @@ async function getAIResponse(userMessage, conversationHistory = '') {
         // Construir el mensaje con contexto
         const systemPrompt = `${BUSINESS_CONTEXT}
 
-Eres un asistente conversacional de WhatsApp. Responde de forma profesional, breve (máximo 3-4 párrafos) y enfocada en ayudar al cliente.
-Si la pregunta es sobre precios específicos o proyectos complejos, sugiere contactar para una cotización personalizada.`;
+Eres un asistente conversacional de WhatsApp. 
+REGLA DE ORO: Sigue la estrategia de "Insistencia Inteligente" (Estados 1, 2 y 3) si el usuario es vago.
+No insistas más de 3 veces. Si el usuario no decide, ofrece contacto humano con un agente.
+Responde de forma profesional, breve (máximo 3-4 párrafos) y enfocada en convertir.`;
 
         const messages = [
             { role: 'system', content: systemPrompt }
