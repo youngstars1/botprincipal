@@ -70,6 +70,9 @@ Puedes contactarnos vía:
 ¿Cuándo te viene mejor para conversar?`
 };
 
+// Almacén de historial en memoria
+const CONVERSATION_HISTORY = {};
+
 /**
  * Manejador principal de mensajes
  */
@@ -79,6 +82,11 @@ async function handleMessage(sock, msg, text) {
     const remoteJid = msg.key.remoteJid;
     const cleanText = text.trim().toLowerCase();
     const senderNumber = remoteJid.replace('@s.whatsapp.net', '');
+
+    // Inicializar historial si no existe
+    if (!CONVERSATION_HISTORY[remoteJid]) {
+        CONVERSATION_HISTORY[remoteJid] = [];
+    }
 
     // --- COMANDOS DE ADMIN ---
     if (cleanText === '!status' || cleanText === 'admin status') {
@@ -108,6 +116,9 @@ async function handleMessage(sock, msg, text) {
         await sock.sendPresenceUpdate('composing', remoteJid);
         await delay(1500);
         await sock.sendMessage(remoteJid, { text: MAIN_MENU });
+        // Limpiamos historial al volver al menú para un inicio fresco si se desea
+        // O lo mantenemos si prefieres que recuerde incluso tras el menú. 
+        // Por ahora lo mantendremos.
         return;
     }
 
@@ -116,6 +127,10 @@ async function handleMessage(sock, msg, text) {
         await sock.sendPresenceUpdate('composing', remoteJid);
         await delay(2000);
         await sock.sendMessage(remoteJid, { text: RESPONSES[cleanText] });
+
+        // Guardamos la interacción en el historial para contexto
+        CONVERSATION_HISTORY[remoteJid].push({ role: 'user', content: text });
+        CONVERSATION_HISTORY[remoteJid].push({ role: 'assistant', content: RESPONSES[cleanText] });
         return;
     }
 
@@ -123,10 +138,20 @@ async function handleMessage(sock, msg, text) {
     try {
         await sock.sendPresenceUpdate('composing', remoteJid);
 
-        // Obtenemos respuesta de la IA
-        const aiResponse = await getAIResponse(text);
+        // Obtenemos respuesta de la IA pasando el historial acumulado
+        const aiResponse = await getAIResponse(text, CONVERSATION_HISTORY[remoteJid]);
 
         await sock.sendMessage(remoteJid, { text: aiResponse });
+
+        // Actualizamos historial con esta nueva interacción
+        CONVERSATION_HISTORY[remoteJid].push({ role: 'user', content: text });
+        CONVERSATION_HISTORY[remoteJid].push({ role: 'assistant', content: aiResponse });
+
+        // Limitar historial a los últimos 10 mensajes para no saturar tokens
+        if (CONVERSATION_HISTORY[remoteJid].length > 10) {
+            CONVERSATION_HISTORY[remoteJid] = CONVERSATION_HISTORY[remoteJid].slice(-10);
+        }
+
     } catch (error) {
         console.error('Error en AI Fallback:', error);
         await sock.sendMessage(remoteJid, {

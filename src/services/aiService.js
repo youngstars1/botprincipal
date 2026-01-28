@@ -32,12 +32,14 @@ Responde de forma profesional, breve (máximo 3-4 párrafos) y enfocada en conve
             { role: 'system', content: systemPrompt }
         ];
 
-        // Agregar historial si existe
-        if (conversationHistory) {
+        // Agregar historial si existe (ahora se espera un array de objetos {role, content})
+        if (conversationHistory && Array.isArray(conversationHistory)) {
+            messages.push(...conversationHistory);
+        } else if (typeof conversationHistory === 'string' && conversationHistory) {
             messages.push({ role: 'assistant', content: conversationHistory });
         }
 
-        // Agregar pregunta del usuario
+        // Agregar pregunta actual del usuario
         messages.push({ role: 'user', content: userMessage });
 
         console.log('🤖 Consultando a ChatGPT...');
