@@ -1,0 +1,33 @@
+# Dependencias
+node_modules/
+package-lock.json
+
+# Archivos de entorno (NO subir)
+.env
+
+# Sesión de WhatsApp (se perderá al reiniciar)
+# ⚠️ Tendrás que escanear el QR cada vez que Railway reinicie
+auth_info_baileys/
+
+# Logs
+*.log
+baileys.log
+core.class.log
+queue.class.log
+
+# Archivos de prueba
+test-gemini.js
+test-openai.js
+
+# QR generado
+bot.qr.png
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
